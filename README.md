@@ -1,2 +1,2 @@
-# EDGChain
-EDGChain
+# EDGChain-E
+EDGChain-E
