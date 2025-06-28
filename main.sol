@@ -3,28 +3,27 @@ pragma solidity ^0.8.0;
 
 contract EDGChainE {
     struct Commit {
-        bytes32 cid;              // IPFS CID of encrypted data/patch (content hash)
-        bytes32 parentCid;        // Parent commit CID
-        mapping(address => bytes) encryptedDEK; // Encrypted DEK per authorized user
-        address[] authorizedUsers; // List of authorized users
+        bytes32 cid; // IPFS CID
+        bytes32 parentCid; // optional for off-chain event validation
     }
 
-    mapping(bytes32 => Commit) public commits;   // Mapping from CID to commit info
-    mapping(address => bool) public owners;      // Owner addresses for access control
-    mapping(address => bool) public contributors; // Contributor addresses
-    bytes32 public latestCid;                    // Latest commit CID
+    mapping(bytes32 => Commit) public commits; // cid => Commit
+    mapping(address => bool) public owners; // admins/owners
+    mapping(address => bool) public contributors; // users who can commit
+    mapping(address => bool) public authorizedUsers; // users who can access any commit
+    bytes32 public latestCid;
 
     event CommitAdded(bytes32 indexed cid, bytes32 indexed parentCid);
-    event AccessGranted(bytes32 indexed cid, address indexed user);
-    event AccessRevoked(bytes32 indexed cid, address indexed user);
+    event AccessGranted(address indexed user);
+    event AccessRevoked(address indexed user);
 
     modifier onlyOwner() {
-        require(owners[msg.sender], "Not authorized (owner only)");
+        require(owners[msg.sender], "Only owner");
         _;
     }
 
     modifier onlyContributor() {
-        require(contributors[msg.sender], "Not authorized (contributor only)");
+        require(contributors[msg.sender], "Only contributor");
         _;
     }
 
@@ -32,65 +31,54 @@ contract EDGChainE {
         owners[msg.sender] = true;
     }
 
-    function addOwner(address newOwner) external onlyOwner {
-        owners[newOwner] = true;
+    // Owner role management
+    function addOwner(address user) external onlyOwner {
+        owners[user] = true;
     }
 
-    function addContributor(address newContributor) external onlyOwner {
-        contributors[newContributor] = true;
+    function removeOwner(address user) external onlyOwner {
+        owners[user] = false;
     }
 
-    function commitData(
-        bytes32 newCid,
-        bytes32 parentCid,
-        address[] calldata users,
-        bytes[] calldata encryptedDEKs
-    ) external onlyContributor {
-        require(users.length == encryptedDEKs.length, "Mismatched inputs");
+    // Contributor role management
+    function addContributor(address user) external onlyOwner {
+        contributors[user] = true;
+    }
+
+    function removeContributor(address user) external onlyOwner {
+        contributors[user] = false;
+    }
+
+    // Global access management
+    function grantAccess(address user) external onlyOwner {
+        authorizedUsers[user] = true;
+        emit AccessGranted(user);
+    }
+
+    function revokeAccess(address user) external onlyOwner {
+        authorizedUsers[user] = false;
+        emit AccessRevoked(user);
+    }
+
+    // Commit data (no per-user DEK mapping, users manage DEK off-chain)
+    function commitData(bytes32 newCid, bytes32 parentCid) external onlyContributor {
         require(commits[newCid].cid == 0, "CID already exists");
 
-        Commit storage c = commits[newCid];
-        c.cid = newCid;
-        c.parentCid = parentCid;
-
-        for (uint i = 0; i < users.length; i++) {
-            c.encryptedDEK[users[i]] = encryptedDEKs[i];
-            c.authorizedUsers.push(users[i]);
-            emit AccessGranted(newCid, users[i]);
-        }
+        commits[newCid] = Commit({
+            cid: newCid,
+            parentCid: parentCid
+        });
 
         latestCid = newCid;
         emit CommitAdded(newCid, parentCid);
     }
 
-    function getEncryptedDEK(bytes32 cid, address user) external view returns (bytes memory) {
-        require(commits[cid].cid != 0, "Commit not found");
-        bytes memory dek = commits[cid].encryptedDEK[user];
-        require(dek.length > 0, "No DEK for this user");
-        return dek;
+    // Simple check: does user have repo access?
+    function hasAccess(address user) external view returns (bool) {
+        return authorizedUsers[user];
     }
 
-    function revokeAccess(bytes32 cid, address user) external onlyOwner {
-        require(commits[cid].cid != 0, "Commit not found");
-        delete commits[cid].encryptedDEK[user];
-
-        // Remove from authorizedUsers array
-        address[] storage authUsers = commits[cid].authorizedUsers;
-        for (uint i = 0; i < authUsers.length; i++) {
-            if (authUsers[i] == user) {
-                authUsers[i] = authUsers[authUsers.length - 1];
-                authUsers.pop();
-                break;
-            }
-        }
-        emit AccessRevoked(cid, user);
-    }
-
-    function getAuthorizedUsers(bytes32 cid) external view returns (address[] memory) {
-        require(commits[cid].cid != 0, "Commit not found");
-        return commits[cid].authorizedUsers;
-    }
-
+    // Retrieve parent for off-chain use
     function getParentCid(bytes32 cid) external view returns (bytes32) {
         require(commits[cid].cid != 0, "Commit not found");
         return commits[cid].parentCid;
