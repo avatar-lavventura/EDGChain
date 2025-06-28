@@ -9,6 +9,7 @@ contract EDGChainE {
     }
 
     struct Project {
+        bytes32 genesisCid; // IPFS CID of the initial encrypted dataset
         bytes32 latestCid;
         mapping(bytes32 => Commit) commits;
         mapping(address => bool) owners;
@@ -18,7 +19,7 @@ contract EDGChainE {
 
     mapping(bytes32 => Project) private projects; // projectID => Project
 
-    event ProjectCreated(bytes32 indexed projectID, address indexed creator);
+    event ProjectCreated(bytes32 indexed projectID, address indexed creator, bytes32 genesisCid);
     event CommitAdded(bytes32 indexed projectID, bytes32 indexed cid, bytes32 indexed parentCid);
     event AccessGranted(bytes32 indexed projectID, address indexed user);
     event AccessRevoked(bytes32 indexed projectID, address indexed user);
@@ -37,10 +38,14 @@ contract EDGChainE {
         _;
     }
 
-    function createProject(bytes32 projectID) external {
+    function createProject(bytes32 projectID, bytes32 genesisCid) external {
         require(projects[projectID].owners[msg.sender] == false, "Project exists");
-        projects[projectID].owners[msg.sender] = true;
-        emit ProjectCreated(projectID, msg.sender);
+        Project storage p = projects[projectID];
+        p.owners[msg.sender] = true;
+        p.genesisCid = genesisCid;
+        p.latestCid = genesisCid;
+
+        emit ProjectCreated(projectID, msg.sender, genesisCid);
         emit OwnerAdded(projectID, msg.sender);
     }
 
@@ -77,7 +82,7 @@ contract EDGChainE {
     function commitData(bytes32 projectID, bytes32 newCid, bytes32 parentCid) external onlyContributor(projectID) {
         Project storage p = projects[projectID];
         require(p.commits[newCid].cid == 0, "CID exists");
-        
+
         p.commits[newCid] = Commit({
             cid: newCid,
             parentCid: parentCid
@@ -88,12 +93,20 @@ contract EDGChainE {
         emit CommitAdded(projectID, newCid, parentCid);
     }
 
+    // -----------------
+    // READ FUNCTIONS
+    // -----------------
+
     function hasAccess(bytes32 projectID, address user) external view returns (bool) {
         return projects[projectID].authorizedUsers[user];
     }
 
     function getLatestCid(bytes32 projectID) external view returns (bytes32) {
         return projects[projectID].latestCid;
+    }
+
+    function getGenesisCid(bytes32 projectID) external view returns (bytes32) {
+        return projects[projectID].genesisCid;
     }
 
     function getParentCid(bytes32 projectID, bytes32 cid) external view returns (bytes32) {
