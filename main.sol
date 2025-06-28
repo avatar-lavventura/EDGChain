@@ -2,85 +2,102 @@
 pragma solidity ^0.8.0;
 
 contract EDGChainE {
+
     struct Commit {
-        bytes32 cid; // IPFS CID
-        bytes32 parentCid; // optional for off-chain event validation
+        bytes32 cid; 
+        bytes32 parentCid;
     }
 
-    mapping(bytes32 => Commit) public commits; // cid => Commit
-    mapping(address => bool) public owners; // admins/owners
-    mapping(address => bool) public contributors; // users who can commit
-    mapping(address => bool) public authorizedUsers; // users who can access any commit
-    bytes32 public latestCid;
+    struct Project {
+        bytes32 latestCid;
+        mapping(bytes32 => Commit) commits;
+        mapping(address => bool) owners;
+        mapping(address => bool) contributors;
+        mapping(address => bool) authorizedUsers;
+    }
 
-    event CommitAdded(bytes32 indexed cid, bytes32 indexed parentCid);
-    event AccessGranted(address indexed user);
-    event AccessRevoked(address indexed user);
+    mapping(bytes32 => Project) private projects; // projectID => Project
 
-    modifier onlyOwner() {
-        require(owners[msg.sender], "Only owner");
+    event ProjectCreated(bytes32 indexed projectID, address indexed creator);
+    event CommitAdded(bytes32 indexed projectID, bytes32 indexed cid, bytes32 indexed parentCid);
+    event AccessGranted(bytes32 indexed projectID, address indexed user);
+    event AccessRevoked(bytes32 indexed projectID, address indexed user);
+    event ContributorAdded(bytes32 indexed projectID, address indexed user);
+    event ContributorRemoved(bytes32 indexed projectID, address indexed user);
+    event OwnerAdded(bytes32 indexed projectID, address indexed user);
+    event OwnerRemoved(bytes32 indexed projectID, address indexed user);
+
+    modifier onlyOwner(bytes32 projectID) {
+        require(projects[projectID].owners[msg.sender], "Only project owner");
         _;
     }
 
-    modifier onlyContributor() {
-        require(contributors[msg.sender], "Only contributor");
+    modifier onlyContributor(bytes32 projectID) {
+        require(projects[projectID].contributors[msg.sender], "Only project contributor");
         _;
     }
 
-    constructor() {
-        owners[msg.sender] = true;
+    function createProject(bytes32 projectID) external {
+        require(projects[projectID].owners[msg.sender] == false, "Project exists");
+        projects[projectID].owners[msg.sender] = true;
+        emit ProjectCreated(projectID, msg.sender);
+        emit OwnerAdded(projectID, msg.sender);
     }
 
-    // Owner role management
-    function addOwner(address user) external onlyOwner {
-        owners[user] = true;
+    function addOwner(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].owners[user] = true;
+        emit OwnerAdded(projectID, user);
     }
 
-    function removeOwner(address user) external onlyOwner {
-        owners[user] = false;
+    function removeOwner(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].owners[user] = false;
+        emit OwnerRemoved(projectID, user);
     }
 
-    // Contributor role management
-    function addContributor(address user) external onlyOwner {
-        contributors[user] = true;
+    function addContributor(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].contributors[user] = true;
+        emit ContributorAdded(projectID, user);
     }
 
-    function removeContributor(address user) external onlyOwner {
-        contributors[user] = false;
+    function removeContributor(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].contributors[user] = false;
+        emit ContributorRemoved(projectID, user);
     }
 
-    // Global access management
-    function grantAccess(address user) external onlyOwner {
-        authorizedUsers[user] = true;
-        emit AccessGranted(user);
+    function grantAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].authorizedUsers[user] = true;
+        emit AccessGranted(projectID, user);
     }
 
-    function revokeAccess(address user) external onlyOwner {
-        authorizedUsers[user] = false;
-        emit AccessRevoked(user);
+    function revokeAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
+        projects[projectID].authorizedUsers[user] = false;
+        emit AccessRevoked(projectID, user);
     }
 
-    // Commit data (no per-user DEK mapping, users manage DEK off-chain)
-    function commitData(bytes32 newCid, bytes32 parentCid) external onlyContributor {
-        require(commits[newCid].cid == 0, "CID already exists");
-
-        commits[newCid] = Commit({
+    function commitData(bytes32 projectID, bytes32 newCid, bytes32 parentCid) external onlyContributor(projectID) {
+        Project storage p = projects[projectID];
+        require(p.commits[newCid].cid == 0, "CID exists");
+        
+        p.commits[newCid] = Commit({
             cid: newCid,
             parentCid: parentCid
         });
 
-        latestCid = newCid;
-        emit CommitAdded(newCid, parentCid);
+        p.latestCid = newCid;
+
+        emit CommitAdded(projectID, newCid, parentCid);
     }
 
-    // Simple check: does user have repo access?
-    function hasAccess(address user) external view returns (bool) {
-        return authorizedUsers[user];
+    function hasAccess(bytes32 projectID, address user) external view returns (bool) {
+        return projects[projectID].authorizedUsers[user];
     }
 
-    // Retrieve parent for off-chain use
-    function getParentCid(bytes32 cid) external view returns (bytes32) {
-        require(commits[cid].cid != 0, "Commit not found");
-        return commits[cid].parentCid;
+    function getLatestCid(bytes32 projectID) external view returns (bytes32) {
+        return projects[projectID].latestCid;
+    }
+
+    function getParentCid(bytes32 projectID, bytes32 cid) external view returns (bytes32) {
+        require(projects[projectID].commits[cid].cid != 0, "Commit not found");
+        return projects[projectID].commits[cid].parentCid;
     }
 }
