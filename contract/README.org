@@ -1,0 +1,5 @@
+ape run scripts/deploy.py
+ape compile
+ape test -s
+
+[[https://academy.apeworx.io/getting-started.html]]
