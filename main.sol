@@ -14,7 +14,6 @@ contract EDGChainE {
         mapping(bytes32 => Commit) commits;
         mapping(address => bool) owners;
         mapping(address => bool) contributors;
-        mapping(address => bool) authorizedUsers;
         string secretDekData; 
     }
 
@@ -37,11 +36,6 @@ contract EDGChainE {
 
     modifier onlyContributor(bytes32 projectID) {
         require(projects[projectID].contributors[msg.sender], "Only project contributor");
-        _;
-    }
-
-    modifier onlyAuthorized(bytes32 projectID) {
-        require(projects[projectID].authorizedUsers[msg.sender], "Not authorized");
         _;
     }
 
@@ -77,16 +71,6 @@ contract EDGChainE {
         emit ContributorRemoved(projectID, user);
     }
 
-    function grantAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
-        projects[projectID].authorizedUsers[user] = true;
-        emit AccessGranted(projectID, user);
-    }
-
-    function revokeAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
-        projects[projectID].authorizedUsers[user] = false;
-        emit AccessRevoked(projectID, user);
-    }
-
     function updateGenesisCid(bytes32 projectID, bytes32 newGenesisCid) external onlyOwner(projectID) {
         Project storage p = projects[projectID];
         bytes32 oldCid = p.genesisCid;
@@ -94,7 +78,7 @@ contract EDGChainE {
         emit GenesisCidUpdated(projectID, oldCid, newGenesisCid);
     }
 
-    function commitData(bytes32 projectID, bytes32 newCid, bytes32 parentCid) external onlyContributor(projectID) onlyAuthorized(projectID) {
+    function commitData(bytes32 projectID, bytes32 newCid, bytes32 parentCid) external onlyContributor(projectID) {
         Project storage p = projects[projectID];
         require(p.commits[newCid].cid == 0, "CID exists");
 
@@ -106,14 +90,6 @@ contract EDGChainE {
         p.latestCid = newCid;
 
         emit CommitAdded(projectID, newCid, parentCid);
-    }
-
-    function viewsecretDekData(bytes32 projectID) external view onlyAuthorized(projectID) returns (string memory) {
-        return projects[projectID].secretDekData;
-    }
-
-    function hasAccess(bytes32 projectID, address user) external view returns (bool) {
-        return projects[projectID].authorizedUsers[user];
     }
 
     function getLatestCid(bytes32 projectID) external view returns (bytes32) {
