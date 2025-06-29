@@ -13,8 +13,7 @@ contract EDGChainE {
         bytes32 latestCid;
         mapping(bytes32 => Commit) commits;
         mapping(address => bool) owners;
-        mapping(address => bool) contributors;
-        mapping(address => bool) authorizedUsers;
+        mapping(address => bool) contributors;        
     }
 
     mapping(bytes32 => Project) private projects; // projectID => Project
@@ -70,16 +69,6 @@ contract EDGChainE {
         emit ContributorRemoved(projectID, user);
     }
 
-    function grantAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
-        projects[projectID].authorizedUsers[user] = true;
-        emit AccessGranted(projectID, user);
-    }
-
-    function revokeAccess(bytes32 projectID, address user) external onlyOwner(projectID) {
-        projects[projectID].authorizedUsers[user] = false;
-        emit AccessRevoked(projectID, user);
-    }
-
     function commitData(bytes32 projectID, bytes32 newCid, bytes32 parentCid) external onlyContributor(projectID) {
         Project storage p = projects[projectID];
         require(p.commits[newCid].cid == 0, "CID exists");
@@ -104,10 +93,6 @@ contract EDGChainE {
     // -----------------
     // READ FUNCTIONS
     // -----------------
-
-    function hasAccess(bytes32 projectID, address user) external view returns (bool) {
-        return projects[projectID].authorizedUsers[user];
-    }
 
     function getLatestCid(bytes32 projectID) external view returns (bytes32) {
         return projects[projectID].latestCid;
