@@ -27,6 +27,7 @@ contract EDGChainE {
     event ContributorRemoved(bytes32 indexed projectID, address indexed user);
     event OwnerAdded(bytes32 indexed projectID, address indexed user);
     event OwnerRemoved(bytes32 indexed projectID, address indexed user);
+    event GenesisCidUpdated(bytes32 indexed projectID, bytes32 oldGenesisCid, bytes32 newGenesisCid);
 
     modifier onlyOwner(bytes32 projectID) {
         require(projects[projectID].owners[msg.sender], "Only project owner");
@@ -91,6 +92,13 @@ contract EDGChainE {
         p.latestCid = newCid;
 
         emit CommitAdded(projectID, newCid, parentCid);
+    }
+
+    function updateGenesisCid(bytes32 projectID, bytes32 newGenesisCid) external onlyOwner(projectID) {
+        Project storage p = projects[projectID];
+        bytes32 oldCid = p.genesisCid;
+        p.genesisCid = newGenesisCid;
+        emit GenesisCidUpdated(projectID, oldCid, newGenesisCid);
     }
 
     // -----------------
