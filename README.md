@@ -1,6 +1,6 @@
 # EDGChain-E
-EDGChain-E
 
+Testing smart contract:
 ```
 cd contracts/
 ape compile
